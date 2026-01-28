@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧發票系統 V25.32 (發票預覽版)</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f3f4f6; --white: #ffffff; --border: #cbd5e1; --inv-color: #059669; --danger: #dc2626; --warn: #f59e0b; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 0; color: #1f2937; height: 100vh; display: flex; flex-direction: column; font-size: 14px; }
+        
+        /* Navigation */
+        nav { background: #1e40af; padding: 10px 20px; display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        nav button { background: rgba(255,255,255,0.15); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 15px; display: flex; align-items: center; gap: 8px; position: relative; }
+        nav button:hover { background: rgba(255,255,255,0.3); }
+        nav button.active { background: white; color: #1e40af; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        
+        .badge { background: #ef4444; color: white; border-radius: 10px; padding: 2px 6px; font-size: 11px; position: absolute; top: 5px; right: 5px; display: none; }
+        .badge.show { display: inline-block; }
+
+        .status-badge { margin-left: auto; color: white; font-size: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 5px 12px; background: rgba(0,0,0,0.25); border-radius: 20px; border: 1px solid rgba(255,255,255,0.3); }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+        .dot.ok { background: #10b981; } .dot.error { background: #ef4444; } .dot.loading { background: #f59e0b; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        /* Layout */
+        main { flex: 1; padding: 20px; overflow-y: auto; }
+        .view-section { display: none; animation: fadeIn 0.3s; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        
+        /* Search Bar */
+        .search-box { background: #f0f9ff; padding: 12px; border-radius: 6px; margin-bottom: 10px; border: 1px solid #bae6fd; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .search-group { display: flex; align-items: center; gap: 5px; border-right: 1px solid #cbd5e1; padding-right: 10px; }
+        .search-group:last-child { border-right: none; }
+        input, select { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; background: #fff; }
+        
+        /* Buttons */
+        .btn { padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; transition:0.2s; font-size: 13px; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-cancel { background: #e5e7eb; color: #374151; }
+        .btn-inv { background: var(--inv-color); color: white; }
+        .btn-debug { background: #64748b; color: white; }
+        .btn-sm { padding: 4px 8px; font-size: 12px; }
+        .btn-import { background: #0ea5e9; color: white; }
+        .btn-warn { background: #f59e0b; color: white; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; background: white; }
+        th { background: #f1f5f9; padding: 10px; text-align: left; border: 1px solid #e2e8f0; color: #475569; position: sticky; top: 0; user-select: none; cursor: pointer; }
+        th:hover { background: #e2e8f0; }
+        td { padding: 8px; border: 1px solid #e2e8f0; vertical-align: middle; }
+        tr:hover { background: #f8fafc; }
+        tfoot { background: #f0fdf4; font-weight: bold; border-top: 2px solid #166534; }
+        
+        /* Staging Area Grid */
+        .staging-container { display: flex; gap: 20px; height: calc(100vh - 180px); }
+        .stage-col { flex: 1; display: flex; flex-direction: column; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+        .stage-header { padding: 10px 15px; font-weight: bold; border-bottom: 1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;}
+        .stage-header.urgent { background: #fef2f2; color: #dc2626; border-bottom-color: #fca5a5; }
+        .stage-header.normal { background: #f8fafc; color: #475569; }
+        .stage-list { flex: 1; overflow-y: auto; padding: 10px; background: #f9fafb; }
+        
+        /* Cards */
+        .order-card { background: white; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); overflow: hidden; transition: 0.2s; position: relative; }
+        .order-card.due { border: 2px solid #ef4444; background: #fff1f2; } 
+        .order-card.future { border: 2px solid #10b981; background: #ecfdf5; }
+        
+        .oc-header { padding: 10px; background: transparent; border-bottom: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 5px; cursor: pointer; }
+        .oc-items { display: none; padding: 5px 10px 10px 10px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+        .oc-items.show { display: block; }
+        .item-row { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px dashed #eee; align-items: center; font-size: 13px; }
+        
+        .btn-del-item { background: transparent; border: none; color: #ef4444; cursor: pointer; font-size: 14px; padding: 2px 5px; margin-left: auto; border-radius: 4px; }
+        .btn-del-item:hover { background: #fee2e2; }
+        
+        .date-picker-sm { font-size: 11px; padding: 2px; border: 1px solid #cbd5e1; border-radius: 4px; }
+        .btn-clear-date { font-size: 10px; padding: 2px 5px; background: #e5e7eb; color: #374151; border: none; border-radius: 3px; cursor: pointer; margin-left: 2px; }
+
+        .action-panel { width: 300px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 95%; max-width: 900px; max-height: 95vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
+        .inv-paper { border: 1px solid #333; padding: 20px; margin-top: 15px; background: #fff; min-height: 300px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .inv-table-input { width: 100%; border: none; border-bottom: 1px solid #eee; padding: 4px; text-align: center; font-size: 13px; }
+        .editable-input { width: 100%; border: 1px solid transparent; background: transparent; padding: 4px; border-radius: 4px; transition: 0.2s; box-sizing: border-box; }
+        .editable-input:hover { border-color: #cbd5e1; background: #fff; }
+        .config-box { background: #f0f9ff; border: 1px solid #bae6fd; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+
+        /* Print Styles */
+        @media print {
+            body * { visibility: hidden; }
+            #previewModal { display: block !important; position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: white; z-index: 9999; }
+            #previewArea, #previewArea * { visibility: visible; }
+            .no-print { display: none !important; }
+            .modal-content { box-shadow: none; border: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="no-print">
+    <button class="active" onclick="switchView('source')">📦 訂單總表</button>
+    <button onclick="switchView('staging')">
+        ⏳ 待處理區 <span id="reminderBadge" class="badge">0</span>
+    </button>
+    <button onclick="switchView('history')">🧾 發票紀錄</button>
+    <button class="btn-debug" onclick="forceReset()" style="background:#b91c1c;">🔴 重置</button>
+    
+    <div class="status-badge" onclick="openConfigModal()">
+        <div id="cloudDot" class="dot"></div>
+        <span id="cloudText">未連線</span>
+        <span>⚙️</span>
+    </div>
+</nav>
+
+<main>
+    <div id="view-source" class="view-section active">
+        <div class="panel" style="display:flex; justify-content:space-between; align-items:center;">
+            <div><h3 style="margin:0;">📦 訂單總表</h3></div>
+            <div style="display:flex; gap:10px;">
+                <input type="file" id="erpFileInput" accept=".csv" style="display:none" onchange="handleErpImport(this)">
+                <button class="btn btn-import" onclick="document.getElementById('erpFileInput').click()">📂 匯入 CSV</button>
+                <button class="btn btn-debug" onclick="syncCloud()">☁️ 雲端同步</button>
+            </div>
+        </div>
+        <div class="search-box">
+            <div class="search-group"><label>日期：</label><input type="date" id="sourceStart" onchange="renderSourcePool()"> ~ <input type="date" id="sourceEnd" onchange="renderSourcePool()"></div>
+            <div class="search-group"><input type="number" id="sourceAmt" placeholder="金額..." style="width:100px;" oninput="renderSourcePool()"></div>
+            <div class="search-group"><input type="text" id="sourceFilter" placeholder="客戶、單號、內容..." oninput="renderSourcePool()" style="width:200px;"></div>
+            <div class="search-group"><label><input type="checkbox" id="hideCompleted" onchange="renderSourcePool()"> 隱藏已結案</label></div>
+        </div>
+        <table id="sourceTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable('source','date')">日期</th>
+                    <th onclick="sortTable('source','id')">單號</th>
+                    <th onclick="sortTable('source','cust')">客戶</th>
+                    <th>內容</th>
+                    <th onclick="sortTable('source','amt')">金額</th>
+                    <th>狀態</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="sourceBody"></tbody>
+        </table>
+    </div>
+
+    <div id="view-staging" class="view-section">
+        <div class="search-box" style="margin-bottom:15px;">
+            <div class="search-group"><label>日期：</label><input type="date" id="stageStart" onchange="renderStaging()"> ~ <input type="date" id="stageEnd" onchange="renderStaging()"></div>
+            <div class="search-group"><input type="number" id="stageAmt" placeholder="金額..." style="width:100px;" oninput="renderStaging()"></div>
+            <div class="search-group"><input type="text" id="stageFilter" placeholder="搜尋..." style="width:200px;" oninput="renderStaging()"></div>
+        </div>
+
+        <div class="staging-container">
+            <div class="stage-col">
+                <div class="stage-header normal">
+                    <div><span>📁 未排程 (即時開立)</span><button class="btn btn-sm btn-success" onclick="addManualOrder()">+ 臨時單</button></div>
+                    <span id="count-unscheduled" style="background:#cbd5e1; padding:2px 8px; border-radius:10px;">0</span>
+                </div>
+                <div class="stage-list" id="list-unscheduled"></div>
+            </div>
+            
+            <div class="stage-col" style="border-color:#fca5a5;">
+                <div class="stage-header urgent"><span>📅 已排程 (預約提醒)</span><span id="count-scheduled" style="background:#fca5a5; color:#7f1d1d; padding:2px 8px; border-radius:10px;">0</span></div>
+                <div class="stage-list" id="list-scheduled"></div>
+            </div>
+            
+            <div class="action-panel">
+                <div style="font-size:50px;">🧾</div><h3>準備開立</h3>
+                <div id="selectionSummary" style="font-weight:bold; margin-bottom:15px; color:#2563eb; min-height:20px;"></div>
+                <button class="btn btn-inv" style="width:100%; padding:12px;" onclick="openInvoiceModal()">✨ 建立發票</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-history" class="view-section">
+    <div class="panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h3 style="margin:0;">🧾 發票紀錄</h3>
+            <button class="btn btn-primary" onclick="openInvSettings()">⚙️ 字軌/號碼管理</button>
+        </div>
+        <div class="search-box">
+                <div class="search-group"><label>日期：</label><input type="date" id="histStart" onchange="renderHistory()"> ~ <input type="date" id="histEnd" onchange="renderHistory()"></div>
+                <div class="search-group"><input type="number" id="histAmt" placeholder="金額..." style="width:100px;" oninput="renderHistory()"></div>
+                <div class="search-group"><input type="text" id="histSearch" placeholder="搜尋..." oninput="renderHistory()" style="width:200px;"></div>
+            </div>
+            <table id="histTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('history','date')">日期</th>
+                        <th onclick="sortTable('history','invNo')">號碼 (預覽)</th>
+                        <th onclick="sortTable('history','cust')">客戶</th>
+                        <th>備註</th>
+                        <th onclick="sortTable('history','total')">金額</th>
+                        <th>狀態</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="histBody"></tbody>
+                <tfoot><tr><td colspan="4" style="text-align:right;">本頁總計：</td><td id="histTotalSum">0</td><td colspan="2"></td></tr></tfoot>
+            </table>
+        </div>
+    </div>
+</main>
+
+<div id="invModal" class="modal">
+    <div class="modal-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:10px;"><h3>🧾 發票開立</h3><button class="btn btn-cancel" onclick="document.getElementById('invModal').style.display='none'">✕</button></div>
+        <div style="display:flex; gap:10px; margin-top:10px;">
+            <div style="flex:1"><label>類型</label><select id="modalInvType" style="width:100%" onchange="updateModalInvNo()"><option value="cloud">☁️ 雲端</option><option value="manual">✍️ 手開</option></select></div>
+            <div style="flex:1"><label>號碼</label><input type="text" id="modalInvFullNo" style="width:100%"></div>
+            <div style="flex:1"><label>日期</label><input type="date" id="modalDate" style="width:100%"></div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:10px;"><div style="flex:2"><label>抬頭</label><input type="text" id="modalCust" style="width:100%"></div><div style="flex:1"><label>統編</label><input type="text" id="modalTaxId" style="width:100%"></div></div>
+        <div style="margin-top:10px;"><label>備註</label><input type="text" id="modalNote" style="width:100%"></div>
+        
+        <div class="inv-paper">
+            <table style="width:100%">
+                <thead><tr><th>品名 (可選/可輸)</th><th style="width:50px">數</th><th style="width:80px">價</th><th style="width:80px">額</th><th></th></tr></thead>
+                <tbody id="modalItems"></tbody>
+                <tfoot><tr><td colspan="5" style="padding-top:10px;"><button class="btn btn-sm btn-success" onclick="addModalRow()">+ 新增</button></td></tr><tr><td colspan="5" id="modalTotal" style="padding-top:15px; border-top:2px solid #eee;"></td></tr></tfoot>
+            </table>
+        </div>
+        <div style="text-align:right; margin-top:20px;"><button class="btn btn-inv" onclick="submitInvoice()">✅ 確認開立</button></div>
+    </div>
+</div>
+
+<div id="previewModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <div id="previewArea" style="padding:20px;">
+            </div>
+        <div class="no-print" style="text-align:right; margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
+            <button class="btn btn-primary" onclick="window.print()">🖨️ 列印</button>
+            <button class="btn btn-cancel" onclick="document.getElementById('previewModal').style.display='none'">關閉</button>
+        </div>
+    </div>
+</div>
+
+<div id="configModal" class="modal">
+    <div class="modal-content"><h3>⚙️ 設定</h3><div class="config-box"><label>GAS 網址</label><input type="text" id="apiUrlInput" style="width:100%"></div><div style="text-align:right;"><button class="btn btn-primary" onclick="saveConfig()">連線</button><button class="btn btn-cancel" onclick="document.getElementById('configModal').style.display='none'">關閉</button></div></div>
+</div>
+
+<div id="dataModal" class="modal">
+    <div class="modal-content"><h3>💾 備份</h3><button class="btn btn-primary" onclick="downloadBackup()">下載 JSON</button><button class="btn btn-danger" onclick="document.getElementById('restoreFile').click()">還原</button><input type="file" id="restoreFile" style="display:none" onchange="restoreBackup(this)"><div style="text-align:right; margin-top:20px;"><button class="btn btn-cancel" onclick="document.getElementById('dataModal').style.display='none'">關閉</button></div></div>
+</div>
+
+<div id="invSettingsModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;">
+            <h3>⚙️ 發票字軌與號碼管理</h3>
+            <button class="btn btn-cancel" onclick="document.getElementById('invSettingsModal').style.display='none'">✕</button>
+        </div>
+        
+        <div class="config-box">
+            <h4 style="margin-top:0; color:#1e40af;">☁️ 雲端發票 (電子計算機)</h4>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <div style="flex:1">
+                    <label>字軌 (例: AB)</label>
+                    <input type="text" id="setCloudPrefix" class="editable-input" style="background:#fff; border:1px solid #ccc;">
+                </div>
+                <div style="flex:2">
+                    <label>下一個號碼</label>
+                    <input type="number" id="setCloudNext" class="editable-input" style="background:#fff; border:1px solid #ccc;">
+                </div>
+            </div>
+        </div>
+
+        <div class="config-box" style="background:#fff7ed; border-color:#fdba74;">
+            <h4 style="margin-top:0; color:#c2410c;">✍️ 手開/二聯/三聯</h4>
+            <div style="display:flex; gap:10px;">
+                <div style="flex:1">
+                    <label>字軌 (例: MM)</label>
+                    <input type="text" id="setManualPrefix" class="editable-input" style="background:#fff; border:1px solid #ccc;">
+                </div>
+                <div style="flex:2">
+                    <label>下一個號碼</label>
+                    <input type="number" id="setManualNext" class="editable-input" style="background:#fff; border:1px solid #ccc;">
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align:right; margin-top:20px;">
+            <button class="btn btn-primary" onclick="saveInvSettings()">💾 儲存設定</button>
+        </div>
+    </div>
+</div>
+<datalist id="productList"></datalist>
+
+<script>
+    let API_URL = "https://script.google.com/macros/s/AKfycby5XUwZ9Cs5_67KSCmdBSZkRlKoBPif6j4t9PpZzievIVjN7T6lry5AlTVD-N7OufdN/exec"; 
+    let db = { orders: [], manualOrders: [], invoices: [], products: [], logistics: [], hiddenOrders: [], savedAddresses: [], settings: { cloudPrefix: 'XC', cloudNext: 23272200, manualPrefix: 'MM', manualNext: 500001 } };
+    let selectedItems = [];
+    let sortState = { source: { col: 'date', dir: 'desc' }, history: { col: 'date', dir: 'desc' } };
+
+    window.onload = function() {
+        let savedUrl = localStorage.getItem('erp_api_url');
+        if (savedUrl) {
+            if (savedUrl.includes("'") || savedUrl.includes('"')) savedUrl = savedUrl.replace(/['"]/g, ''); 
+            API_URL = savedUrl;
+            checkConnection(true);
+            syncCloud();
+        } else {
+            checkConnection(false);
+        }
+        const saved = localStorage.getItem('inv_sys_v25_25');
+        if(saved) { try { db = JSON.parse(saved); } catch(e) {} }
+        updateProductDatalist(); 
+        refreshViews();
+    };
+    function renderHistory() {
+        const tbody = document.getElementById('histBody');
+        if (!tbody) return;
+
+        const sDate = document.getElementById('histStart').value;
+        const eDate = document.getElementById('histEnd').value;
+        const amtFilter = document.getElementById('histAmt').value;
+        const filter = document.getElementById('histSearch').value.toLowerCase();
+        
+        let totalSum = 0;
+
+        const data = (db.invoices || []).filter(inv => {
+            let invDate = inv.date ? inv.date.replace(/\//g, '-') : '';
+            if (sDate && invDate < sDate) return false;
+            if (eDate && invDate > eDate) return false;
+            if (amtFilter && Math.abs(inv.total - amtFilter) > 10) return false;
+            if (filter && !inv.cust.toLowerCase().includes(filter) && !inv.invNo.toLowerCase().includes(filter)) return false;
+            return true;
+        });
+
+        const { col, dir } = sortState.history;
+        data.sort((a, b) => {
+            let valA = a[col] || '';
+            let valB = b[col] || '';
+            if (valA < valB) return dir === 'asc' ? -1 : 1;
+            if (valA > valB) return dir === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        tbody.innerHTML = data.map(inv => {
+            if (inv.status === '正常') totalSum += inv.total;
+            // 修改：發票號碼增加點擊事件
+            return `
+            <tr>
+                <td>${inv.date}</td>
+                <td style="font-weight:bold; color:#1e40af; cursor:pointer; text-decoration:underline;" title="點擊預覽/列印" onclick="previewInvoice('${inv.invNo}')">${inv.invNo} 👁️</td>
+                <td>${inv.cust}</td>
+                <td><input type="text" class="editable-input" value="${inv.note||''}" onchange="updateNote('${inv.invNo}', this.value)"></td>
+                <td style="text-align:right; font-weight:bold;">$${inv.total.toLocaleString()}</td>
+                <td><span style="color:${inv.status==='正常'?'#059669':'#ef4444'}">${inv.status}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-warn" onclick="voidInvoice('${inv.invNo}')">作廢</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${inv.invNo}')">刪除</button>
+                </td>
+            </tr>
+            `;
+        }).join('');
+
+        const totalSumEl = document.getElementById('histTotalSum');
+        if (totalSumEl) totalSumEl.innerText = '$' + totalSum.toLocaleString();
+    }
+    
+    // --- 新增：發票預覽功能 ---
+    function previewInvoice(invNo) {
+        const inv = db.invoices.find(i => i.invNo === invNo);
+        if (!inv) return alert("找不到發票資料");
+
+        const itemsHtml = inv.items.map((item, idx) => `
+            <tr>
+                <td style="padding:6px; text-align:center; border-bottom:1px solid #eee;">${idx + 1}</td>
+                <td style="padding:6px; text-align:left; border-bottom:1px solid #eee;">${item.name}</td>
+                <td style="padding:6px; text-align:center; border-bottom:1px solid #eee;">${item.qty}</td>
+                <td style="padding:6px; text-align:right; border-bottom:1px solid #eee;">${parseFloat(item.price).toLocaleString()}</td>
+                <td style="padding:6px; text-align:right; border-bottom:1px solid #eee;">${Math.round(item.qty * item.price).toLocaleString()}</td>
+            </tr>
+        `).join('');
+
+        // 嘗試讀取已存的稅金，若無則反推 (相容舊資料)
+        const total = inv.total;
+        let tax = inv.tax;
+        if (tax === undefined || tax === null) {
+            tax = Math.round(total - (total / 1.05));
+        }
+        const subtotal = total - tax;
+
+        const html = `
+            <div style="font-family:'Microsoft JhengHei', sans-serif; color:#000;">
+                <h2 style="text-align:center; margin-bottom:5px;">電子發票證明聯 (補印)</h2>
+                <h4 style="text-align:center; margin:0; color:#666;">${inv.type === 'cloud' ? '電子計算機發票' : '手開三聯式發票'}</h4>
+                <hr style="margin: 15px 0; border:1px dashed #ccc;">
+                
+                <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:14px;">
+                    <div style="line-height:1.6;">
+                        <div><strong>買受人：</strong>${inv.cust}</div>
+                        <div><strong>統一編號：</strong>${inv.taxId || '(未記錄)'}</div> 
+                    </div>
+                    <div style="text-align:right; line-height:1.6;">
+                        <div><strong>發票號碼：</strong>${inv.invNo}</div>
+                        <div><strong>日期：</strong>${inv.date}</div>
+                        <div><strong>格式：</strong>${inv.type === 'cloud' ? '25' : '21'}</div>
+                    </div>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:14px;">
+                    <thead>
+                        <tr style="background:#f8f9fa; border-top:2px solid #000; border-bottom:2px solid #000;">
+                            <th style="padding:8px; text-align:center; width:50px;">序</th>
+                            <th style="padding:8px; text-align:left;">品名</th>
+                            <th style="padding:8px; text-align:center; width:60px;">量</th>
+                            <th style="padding:8px; text-align:right; width:90px;">單價</th>
+                            <th style="padding:8px; text-align:right; width:90px;">金額</th>
+                        </tr>
+                    </thead>
+                    <tbody>${itemsHtml}</tbody>
+                    <tfoot>
+                        <tr style="border-top:2px solid #000;">
+                            <td colspan="3"></td>
+                            <td style="padding:5px; text-align:right;">銷售額：</td>
+                            <td style="padding:5px; text-align:right;">${subtotal.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3"></td>
+                            <td style="padding:5px; text-align:right;">稅額：</td>
+                            <td style="padding:5px; text-align:right;">${tax.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3"></td>
+                            <td style="padding:5px; text-align:right; font-weight:bold;">總計：</td>
+                            <td style="padding:5px; text-align:right; font-weight:bold; font-size:18px;">$${total.toLocaleString()}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <div style="border:1px solid #ddd; padding:10px; font-size:13px; color:#555;">
+                    <strong>備註：</strong> ${inv.note || '無'}
+                </div>
+            </div>
+        `;
+
+        document.getElementById('previewArea').innerHTML = html;
+        document.getElementById('previewModal').style.display = 'flex';
+    }
+
+    function refreshViews() { renderSourcePool(); renderStaging(); renderHistory(); }
+    function saveData() { localStorage.setItem('inv_sys_v25_25', JSON.stringify(db)); }
+    function switchView(viewId) {
+        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+        document.getElementById('view-' + viewId).classList.add('active');
+        document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+        const navMap = { 'source': 0, 'staging': 1, 'history': 2 };
+        if (document.querySelectorAll('nav button')[navMap[viewId]]) document.querySelectorAll('nav button')[navMap[viewId]].classList.add('active');
+    }
+
+    function openConfigModal() { document.getElementById('apiUrlInput').value = API_URL; document.getElementById('configModal').style.display = 'flex'; }
+    function saveConfig() { const u = document.getElementById('apiUrlInput').value.trim(); if(u) { API_URL = u; localStorage.setItem('erp_api_url', u); checkConnection(true); document.getElementById('configModal').style.display='none'; syncCloud(); } }
+    function checkConnection(isOk) { document.getElementById('cloudDot').className = isOk ? 'dot ok' : 'dot error'; document.getElementById('cloudText').innerText = isOk ? "已連線" : "未設定"; }
+    function setLoading(isLoading) { document.getElementById('cloudDot').className = isLoading ? 'dot loading' : (API_URL ? 'dot ok' : 'dot error'); }
+
+    async function syncCloud() {
+        if(!API_URL) return; setLoading(true);
+        try {
+            const res = await fetch(API_URL + "?t=" + Date.now()); const d = await res.json();
+            if(d) {
+                db.orders = d.o || []; db.manualOrders = d.mo || []; db.invoices = d.inv || [];
+                db.products = d.products || []; db.logistics = d.l || []; db.hiddenOrders = d.ho || [];
+                if(d.settings) db.settings = d.settings;
+                saveData(); refreshViews(); updateProductDatalist();
+            }
+        } catch(e) { checkConnection(false); } finally { setLoading(false); }
+    }
+
+    async function pushToCloud(actionType) {
+        saveData(); 
+        if(!API_URL) return; 
+        setLoading(true);
+        try {
+            const payload = { 
+                action: actionType || 'save_invoice', 
+                orders: db.orders, 
+                manualOrders: db.manualOrders, 
+                invoices: db.invoices, 
+                products: db.products, 
+                settings: db.settings 
+            };
+            const response = await fetch(API_URL, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'text/plain' }, 
+                body: JSON.stringify(payload) 
+            });
+            if (response.ok) { console.log("☁️ 雲端同步成功"); }
+        } catch(e) { 
+            console.error("❌ 雲端同步失敗:", e); 
+            alert("同步至雲端失敗，但資料已暫存在此電腦。請檢查網路連線後點擊右上角同步。");
+        } finally { 
+            setLoading(false); 
+        }
+    }
+
+    function renderSourcePool() {
+        const tbody = document.getElementById('sourceBody');
+        if (!tbody) return; 
+        const sDate = document.getElementById('sourceStart').value;
+        const eDate = document.getElementById('sourceEnd').value;
+        const amtFilter = document.getElementById('sourceAmt').value;
+        const filter = document.getElementById('sourceFilter').value.toLowerCase();
+        const hideCompleted = document.getElementById('hideCompleted').checked;
+        
+        let combined = [...(db.orders || []), ...(db.manualOrders || [])];
+        let data = combined.filter(o => {
+            const isFullyInvoiced = (o.items||[]).every(i => (parseInt(i.invoicedQty)||0) >= (parseInt(i.qty)||0));
+            if (hideCompleted && (isFullyInvoiced || o.inStaging)) return false;
+            
+            let oDate = o.date ? o.date.replace(/\//g, '-') : '';
+            if (sDate && oDate < sDate) return false; 
+            if (eDate && oDate > eDate) return false;
+            
+            const total = o.price ? parseInt(o.price) : (o.items||[]).reduce((s,i)=>s+((parseInt(i.price)||0)*(parseInt(i.qty)||0)),0);
+            if (amtFilter && total != amtFilter) return false;
+
+            const content = (o.items||[]).map(i=>i.name).join(' ').toLowerCase();
+            if (filter && !o.cust.toLowerCase().includes(filter) && !String(o.id).toLowerCase().includes(filter) && !content.includes(filter)) return false;
+            return true;
+        });
+
+        const { col, dir } = sortState.source;
+        data.sort((a,b) => {
+             let valA = col==='amt' ? (a.price ? parseInt(a.price) : 0) : (a[col]||'');
+             let valB = col==='amt' ? (b.price ? parseInt(b.price) : 0) : (b[col]||'');
+             if(valA < valB) return dir==='asc'?-1:1; if(valA > valB) return dir==='asc'?1:-1; return 0;
+        });
+
+        tbody.innerHTML = data.map(o => {
+            const total = o.price ? parseInt(o.price) : (o.items||[]).reduce((sum, i) => sum + (parseInt(i.price)||0) * (parseInt(i.qty)||0), 0);
+            let status = o.inStaging ? '<span style="color:#999;font-weight:bold;">✅ 已移轉</span>' : (o.erpInvoiceNo ? `<span style="color:#1e40af;">🔵 已開(${o.erpInvoiceNo})</span>` : '<span style="color:#f59e0b;">未開</span>');
+            let btn = o.inStaging ? '-' : `<button class="btn btn-sm btn-primary" onclick="confirmOrder('${String(o.id)}', this)">確認</button> <button class="btn btn-sm btn-danger" style="margin-left:5px;" onclick="deleteOrder('${String(o.id)}')">刪除</button>`;
+            
+            // 修改重點：單號欄位加入 onclick 事件
+            return `<tr>
+                <td>${o.date}</td>
+                <td style="color:#2563eb; cursor:pointer; text-decoration:underline; font-weight:bold;" onclick="previewOrder('${o.id}')" title="點擊預覽詳情">${o.id} 🔍</td>
+                <td>${o.cust}</td>
+                <td>${(o.items||[]).map(i=>i.name).join(', ')}</td>
+                <td>${total.toLocaleString()}</td>
+                <td>${status}</td>
+                <td style="text-align:center;">${btn}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function confirmOrder(id, btn) { 
+        if(btn) btn.disabled = true; 
+        let o = db.orders.find(x => String(x.id) === String(id)); 
+        if(!o) o = db.manualOrders.find(x => String(x.id) === String(id)); 
+        
+        if(o) { 
+            o.inStaging = true; 
+            pushToCloud('save_invoice'); 
+            refreshViews(); 
+            setTimeout(() => { switchView('staging'); renderStaging(); }, 300);
+        } else { 
+            alert("找不到訂單資料 (ID: " + id + ")，請嘗試重置系統。"); 
+            if(btn) btn.disabled = false;
+        }
+    }
+
+    function renderStaging() {
+        const listUn = document.getElementById('list-unscheduled');
+        const listSch = document.getElementById('list-scheduled');
+        if (!listUn || !listSch) return;
+
+        listUn.innerHTML = ''; listSch.innerHTML = ''; 
+        selectedItems = []; 
+        if (document.getElementById('selectionSummary')) document.getElementById('selectionSummary').innerText = '';
+
+        const stageStartEl = document.getElementById('stageStart');
+        const stageEndEl = document.getElementById('stageEnd');
+        const stageAmtEl = document.getElementById('stageAmt');
+        const stageFilterEl = document.getElementById('stageFilter');
+
+        const sDate = stageStartEl ? stageStartEl.value : '';
+        const eDate = stageEndEl ? stageEndEl.value : '';
+        const amtFilter = stageAmtEl ? stageAmtEl.value : '';
+        const filter = stageFilterEl ? stageFilterEl.value.toLowerCase() : '';
+        
+        let combined = [...(db.orders||[]), ...(db.manualOrders||[])];
+        const today = new Date().toISOString().split('T')[0];
+        let dueCount = 0;
+
+        combined.forEach(o => {
+            if(!o.inStaging) return;
+            const remaining = (o.items||[]).filter(i => (parseInt(i.qty)||0) > (parseInt(i.invoicedQty)||0));
+            if(remaining.length === 0) return; 
+
+            const total = remaining.reduce((s, i) => {
+                let itemAmt = 0;
+                if (i.total) itemAmt = parseFloat(i.total);
+                else if (i.amt) itemAmt = parseFloat(i.amt);
+                else itemAmt = parseFloat(i.price || 0) * (parseInt(i.qty) - (parseInt(i.invoicedQty)||0));
+                return s + itemAmt;
+            }, 0);
+            
+            let oDate = o.date ? o.date.replace(/\//g, '-') : '';
+            if (sDate && oDate < sDate) return; 
+            if (eDate && oDate > eDate) return;
+            if (amtFilter && Math.abs(total - amtFilter) > 10) return;
+            if (filter && !o.cust.toLowerCase().includes(filter)) return;
+
+            const hasDate = !!o.expectedDate;
+            const isDue = hasDate && (o.expectedDate <= today);
+            
+            const dateInput = `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <span style="font-weight:bold; color:#1e40af;">${o.cust}</span>
+                <div>
+                    <input type="date" value="${o.expectedDate||''}" class="date-picker-sm ${isDue?'due':''}" onchange="updateOrderDate('${o.id}', this.value)">
+                    ${hasDate ? `<button class="btn-clear-date" onclick="updateOrderDate('${o.id}', '')">✕</button>` : ''}
+                </div>
+            </div>`;
+
+            const itemsHtml = remaining.map(i => {
+                const realItemTotal = i.total ? parseFloat(i.total) : (i.amt ? parseFloat(i.amt) : (parseFloat(i.price) * parseFloat(i.qty)));
+                return `
+                <div class="item-row">
+                    <input type="checkbox" onchange="toggleItem(this, '${o.id}', '${i.uid}', '${i.name}', '${i.price}', ${(parseInt(i.qty)||0) - (parseInt(i.invoicedQty)||0)}, '${o.cust}', ${realItemTotal})">
+                    <div style="flex:1">
+                        <div>${i.name}</div>
+                        <div style="font-size:12px; color:#d97706; font-weight:bold;">$${realItemTotal.toLocaleString()}</div>
+                    </div>
+                    <button class="btn-del-item" onclick="deleteStagingItem('${o.id}','${i.uid}')">🗑️</button>
+                </div>`;
+            }).join('');
+
+            const cardHtml = `<div class="order-card ${isDue ? 'due' : (hasDate ? 'future' : '')}">
+                <div class="oc-header">${dateInput}<div style="font-size:12px; color:#666;">未稅總計: $${total.toLocaleString()}</div></div>
+                <div class="oc-items show">${itemsHtml}</div>
+            </div>`;
+
+            if (hasDate) { listSch.innerHTML += cardHtml; if(isDue) dueCount++; } else { listUn.innerHTML += cardHtml; }
+        });
+        
+        if (document.getElementById('count-unscheduled')) document.getElementById('count-unscheduled').innerText = listUn.children.length;
+        if (document.getElementById('count-scheduled')) document.getElementById('count-scheduled').innerText = listSch.children.length;
+        const badge = document.getElementById('reminderBadge'); 
+        if (badge) {
+            badge.innerText = dueCount; 
+            badge.className = dueCount > 0 ? 'badge show' : 'badge';
+        }
+    }
+    
+    function sortTable(view, col) { 
+        const state = sortState[view]; 
+        state.dir = (state.col === col && state.dir === 'asc') ? 'desc' : 'asc'; 
+        state.col = col; 
+        if(view === 'source') renderSourcePool(); else renderHistory(); 
+    }
+    
+    function deleteStagingItem(oid, uid) {
+        if(confirm("【強制歸零】\n這將會把此項目踢出待開發票區，並重置狀態。\n確定要執行嗎？")) {
+            let o = db.orders.find(x => String(x.id) === String(oid));
+            if(!o) o = db.manualOrders.find(x => String(x.id) === String(oid));
+            if(o) {
+                const item = o.items.find(i => String(i.uid) === String(uid));
+                if (item) item.invoicedQty = 0;
+                o.inStaging = false;
+                pushToCloud('save_invoice'); renderStaging(); renderSourcePool();
+                alert("已重置項目，請至【訂單總表】重新確認。");
+            }
+        }
+    }
+
+    function updateOrderDate(oid, d) { let o = db.orders.find(x=>x.id==oid); if(!o) o=db.manualOrders.find(x=>x.id==oid); if(o){ o.expectedDate=d; pushToCloud('save_invoice'); renderStaging(); } }
+    
+    function toggleItem(chk, oid, uid, name, price, avail, cust, itemTotal) { 
+        if (chk.checked) {
+            const finalPrice = itemTotal ? (parseFloat(itemTotal) / parseFloat(avail)) : parseFloat(price);
+            selectedItems.push({oid, uid, name, price: finalPrice, avail, cust}); 
+        } else { 
+            selectedItems = selectedItems.filter(i => i.uid !== uid); 
+        }
+        document.getElementById('selectionSummary').innerText = selectedItems.length > 0 ? `已選 ${selectedItems.length} 項` : ''; 
+    }
+    
+function addManualOrder() { 
+        const c = prompt("客戶名稱:"); 
+        if(c) { 
+            const t = prompt("統一編號 (選填):", ""); // 多詢問統編
+            db.manualOrders.unshift({ 
+                id: 'MNL-'+Date.now(), 
+                date: new Date().toISOString().split('T')[0], 
+                cust: c, 
+                taxId: t || "", // 存入訂單資料
+                items: [{uid: 'm'+Date.now(), name: '臨時', price: 0, qty: 1, invoicedQty: 0}], 
+                inStaging: true 
+            }); 
+            pushToCloud('save_invoice'); 
+            refreshViews(); 
+        } 
+    }
+
+    function openInvoiceModal() { 
+        if(selectedItems.length === 0) return alert("請先勾選項目"); 
+        
+        // 取得選取的客戶
+        const custs = [...new Set(selectedItems.map(i => i.cust))]; 
+        if(custs.length > 1 && !confirm("跨客戶合併開立？")) return; 
+        
+        const targetCust = custs[0];
+        document.getElementById('modalCust').value = targetCust; 
+
+        //Base64: --- 自動帶入統編邏輯 Start ---
+        let autoTaxId = '';
+
+        try {
+            // 策略 1: 檢查來源訂單是否有 taxId
+            // 我們從勾選的第一個項目(item)反查它的訂單(order)
+            const firstOid = selectedItems[0].oid;
+            if(firstOid) {
+                let srcOrder = db.orders.find(x => String(x.id) === String(firstOid));
+                if(!srcOrder) srcOrder = db.manualOrders.find(x => String(x.id) === String(firstOid));
+                
+                // 如果找到訂單，且訂單內有 taxId，就抓出來
+                if(srcOrder && srcOrder.taxId) {
+                    autoTaxId = srcOrder.taxId;
+                    console.log("找到訂單統編:", autoTaxId);
+                }
+            }
+        } catch(e) { console.log('查無訂單統編', e); }
+
+        // 策略 2: 如果訂單沒資料，從歷史發票紀錄找 (學習機制)
+        if(!autoTaxId && db.invoices && db.invoices.length > 0) {
+            // 找出該客戶最近一次有打統編的紀錄
+            const history = db.invoices.find(inv => inv.cust === targetCust && inv.taxId && inv.taxId.length >= 8);
+            if(history) {
+                autoTaxId = history.taxId;
+                console.log("找到歷史統編:", autoTaxId);
+            }
+        }
+
+        document.getElementById('modalTaxId').value = autoTaxId;
+        // --- 自動帶入統編邏輯 End ---
+
+        document.getElementById('modalDate').value = new Date().toISOString().split('T')[0]; 
+        updateModalInvNo(); 
+        
+        const tbody = document.getElementById('modalItems'); 
+        tbody.innerHTML = ''; 
+        
+        selectedItems.forEach(item => { 
+            const tr = document.createElement('tr'); 
+            tr.innerHTML = `
+                <td><input class="inv-table-input" value="${item.name}" list="productList"></td>
+                <td><input class="inv-table-input" type="number" value="${item.avail}" oninput="recalcModal()"></td>
+                <td><input class="inv-table-input" type="number" value="${item.price}" oninput="recalcModal()"></td>
+                <td class="row-total" style="text-align:right; padding-right:5px;">0</td>
+                <td>
+                    <input type="hidden" class="row-oid" value="${item.oid}">
+                    <input type="hidden" class="row-uid" value="${item.uid}">
+                </td>
+            `;
+            tbody.appendChild(tr); 
+        }); 
+        
+        const totalContainer = document.getElementById('modalTotal');
+        totalContainer.innerHTML = ''; 
+        
+        recalcModal(); 
+        document.getElementById('invModal').style.display = 'flex'; 
+    }
+
+    function updateModalInvNo() { 
+        initSettingsSafe();
+        const t = document.getElementById('modalInvType').value; 
+        const p = t==='cloud'? (db.settings.cloudPrefix||'') : (db.settings.manualPrefix||''); 
+        const n = t==='cloud'? (db.settings.cloudNext||0) : (db.settings.manualNext||0); 
+        document.getElementById('modalInvFullNo').value = `${p}-${n}`; 
+    }
+
+    function addModalRow() { const tr = document.createElement('tr'); tr.innerHTML = `<td><input class="inv-table-input" list="productList"></td><td><input class="inv-table-input" type="number" value="1" oninput="recalcModal()"></td><td><input class="inv-table-input" type="number" value="0" oninput="recalcModal()"></td><td class="row-total">0</td><td></td>`; document.getElementById('modalItems').appendChild(tr); }
+    function updateNote(no, val) { const inv = db.invoices.find(i => i.invNo === no); if(inv) { inv.note = val; pushToCloud('save_invoice'); } }
+    function updateProductDatalist() { const dl = document.getElementById('productList'); if(dl && db.products) { dl.innerHTML = db.products.map(p => `<option value="${p}">`).join(''); } }
+    function voidInvoice(no) { if(confirm("確定作廢？項目將回歸待處理區。")) { const inv = db.invoices.find(i => i.invNo === no); if(inv) { inv.status = '作廢'; inv.items.forEach(item => { let o = db.orders.find(x => String(x.id) === String(item.oid)); if(!o) o = db.manualOrders.find(x => String(x.id) === String(item.oid)); if(o) { const i = o.items.find(x => String(x.uid) === String(item.uid)); if(i) i.invoicedQty = Math.max(0, (i.invoicedQty||0) - item.qty); } }); pushToCloud('save_invoice'); refreshViews(); alert("已作廢。"); } } }
+
+    function recalcModal(source) { 
+        let salesAmt = 0; 
+        
+        document.querySelectorAll('#modalItems tr').forEach(tr => { 
+            const inputs = tr.querySelectorAll('input'); 
+            const qty = parseFloat(inputs[1].value) || 0; 
+            const price = parseFloat(inputs[2].value) || 0; 
+            const sum = Math.round(qty * price); 
+            if(tr.querySelector('.row-total')) tr.querySelector('.row-total').innerText = sum.toLocaleString(); 
+            salesAmt += sum; 
+        }); 
+        
+        let taxInput = document.getElementById('modalTaxInput');
+        let taxVal = 0;
+
+        if (source === 'tax' && taxInput) {
+            taxVal = parseFloat(taxInput.value) || 0;
+        } else {
+            taxVal = Math.round(salesAmt * 0.05);
+            if(taxInput) taxInput.value = taxVal;
+        }
+        
+        const grandTotal = salesAmt + taxVal;
+
+        const container = document.getElementById('modalTotal');
+        if (!taxInput) {
+            container.innerHTML = `
+                <div style="text-align: right;">
+                    <div style="font-size:12px; color:#666;">銷售額：<span id="displaySalesAmt">$${salesAmt.toLocaleString()}</span></div>
+                    <div style="font-size:12px; color:#666; margin:3px 0; display:flex; align-items:center; justify-content:flex-end;">
+                        稅金(可改)：<input type="number" id="modalTaxInput" value="${taxVal}" 
+                        style="width:70px; text-align:right; border:1px solid #ccc; border-radius:4px; padding:2px; font-size:12px;" 
+                        oninput="recalcModal('tax')">
+                    </div>
+                    <div style="font-size:18px; color:#166534; font-weight:bold;">總計：<span id="displayGrandTotal">$${grandTotal.toLocaleString()}</span></div>
+                </div>
+            `;
+        } else {
+            document.getElementById('displaySalesAmt').innerText = '$' + salesAmt.toLocaleString();
+            document.getElementById('displayGrandTotal').innerText = '$' + grandTotal.toLocaleString();
+        }
+    }
+
+    function submitInvoice() {
+        const no = document.getElementById('modalInvFullNo').value;
+        const items = []; 
+        let subtotal = 0;
+
+        const rows = document.querySelectorAll('#modalItems tr');
+        if (rows.length === 0) return alert("請至少輸入一個品項");
+
+        rows.forEach(tr => {
+            const inputs = tr.querySelectorAll('input');
+            const name = inputs[0].value.trim(); 
+            const qty = parseFloat(inputs[1].value) || 0; 
+            const price = parseFloat(inputs[2].value) || 0;
+            
+            const oidEl = tr.querySelector('.row-oid');
+            const uidEl = tr.querySelector('.row-uid');
+            const oid = oidEl ? oidEl.value : null; 
+            const uid = uidEl ? uidEl.value : null;
+            
+            if (qty > 0 && name) {
+                items.push({name, qty, price, oid, uid});
+                subtotal += Math.round(qty * price);
+                
+                if(oid && uid) {
+                    let o = db.orders.find(x => String(x.id) === String(oid));
+                    if(!o) o = db.manualOrders.find(x => String(x.id) === String(oid));
+                    if(o) { 
+                        const i = o.items.find(x => String(x.uid) === String(uid)); 
+                        if(i) i.invoicedQty = (parseFloat(i.invoicedQty)||0) + qty; 
+                    }
+                }
+            }
+        });
+
+        if (items.length === 0) return alert("請檢查品名或數量是否正確");
+
+        const taxInput = document.getElementById('modalTaxInput');
+        const finalTax = taxInput ? (parseFloat(taxInput.value) || 0) : Math.round(subtotal * 0.05);
+        const finalTotal = subtotal + finalTax;
+
+        db.invoices.unshift({ 
+            invNo: no, 
+            date: document.getElementById('modalDate').value, 
+            cust: document.getElementById('modalCust').value,
+            taxId: document.getElementById('modalTaxId').value, // 新增：儲存統編
+            note: document.getElementById('modalNote').value, 
+            type: document.getElementById('modalInvType').value, 
+            items: items, 
+            total: finalTotal, 
+            tax: finalTax,
+            status: '正常' 
+        });
+        
+        const parts = no.split('-');
+        if(parts.length === 2) { 
+            const next = parseInt(parts[1]) + 1; 
+            if(document.getElementById('modalInvType').value === 'cloud') db.settings.cloudNext = next; 
+            else db.settings.manualNext = next; 
+        }
+
+        pushToCloud('save_invoice'); 
+        document.getElementById('invModal').style.display = 'none'; 
+        refreshViews(); 
+        alert("✅ 發票已成功開立！");
+    }
+
+    function forceReset() { if(confirm("確定重置系統與連線設定?")) { localStorage.clear(); location.reload(); } }
+    function downloadBackup() { const d = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db)); const a = document.createElement('a'); a.href = d; a.download = "invoice_sys_backup.json"; document.body.appendChild(a); a.click(); a.remove(); }
+    function restoreBackup(input) { const f = input.files[0]; if(!f) return; const r = new FileReader(); r.onload = e => { try { db = JSON.parse(e.target.result); saveData(); refreshViews(); if(API_URL) pushToCloud(); alert("還原成功！"); document.getElementById('dataModal').style.display='none'; } catch(err) { alert("格式錯誤"); } }; r.readAsText(f); input.value=''; }
+    // --- 修正後的 CSV 匯入功能 (能讀取統編) ---
+// --- 修正後的 CSV 匯入功能 (能讀取統編) ---
+    function handleErpImport(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const text = e.target.result;
+            const lines = text.split(/\r\n|\n/);
+            
+            // 假設 CSV 格式順序: 單號, 日期, 客戶, 統編, 品名, 數量, 單價
+            // 請確認您的 CSV 第 4 欄 (索引值 3) 是統編
+            
+            let newOrders = [];
+            let orderMap = {};
+            let count = 0;
+
+            // 從第 1 行開始讀 (跳過標題)
+            for (let i = 1; i < lines.length; i++) {
+                const row = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, '')); // 去除引號
+                if (row.length < 5) continue;
+
+                const oid = row[0];       // 第1欄: 單號
+                const date = row[1];      // 第2欄: 日期
+                const cust = row[2];      // 第3欄: 客戶
+                const taxId = row[3];     // 第4欄: ★ 統編 (這裡最重要)
+                const itemName = row[4];  // 第5欄: 品名
+                const qty = parseInt(row[5]) || 0;  // 第6欄: 數量
+                const price = parseInt(row[6]) || 0;// 第7欄: 單價
+
+                if (!oid) continue;
+
+                if (!orderMap[oid]) {
+                    orderMap[oid] = {
+                        id: oid,
+                        date: date,
+                        cust: cust,
+                        taxId: taxId, // 將讀到的統編存起來
+                        items: [],
+                        inStaging: false
+                    };
+                    newOrders.push(orderMap[oid]);
+                    count++;
+                }
+                
+                orderMap[oid].items.push({
+                    uid: oid + '-' + (orderMap[oid].items.length + 1),
+                    name: itemName,
+                    qty: qty,
+                    price: price,
+                    invoicedQty: 0
+                });
+            }
+
+            if (newOrders.length > 0) {
+                // 將新訂單合併入資料庫
+                newOrders.forEach(no => {
+                    if (!db.orders.some(ex => String(ex.id) === String(no.id))) {
+                        db.orders.unshift(no);
+                    }
+                });
+                pushToCloud('save_invoice');
+                refreshViews();
+                alert(`✅ 成功匯入 ${count} 筆訂單！\n(已包含統編資料)`);
+            } else {
+                alert("❌ 匯入失敗：找不到有效資料，請檢查 CSV 格式。");
+            }
+        };
+        reader.readAsText(file);
+        input.value = '';
+    }
+    
+    function deleteOrder(id) {
+        if (!confirm("⚠️ 危險操作！\n\n確定要「完全刪除」這筆訂單嗎？\n刪除後無法復原。")) return;
+        let idx = db.orders.findIndex(x => String(x.id) === String(id));
+        if (idx !== -1) {
+            db.orders.splice(idx, 1);
+        } else {
+            idx = db.manualOrders.findIndex(x => String(x.id) === String(id));
+            if (idx !== -1) {
+                db.manualOrders.splice(idx, 1);
+            } else {
+                return alert("找不到此訂單，可能已被刪除。");
+            }
+        }
+        pushToCloud('save_invoice'); 
+        renderSourcePool(); 
+        alert("訂單已刪除。");
+    }
+
+    function deleteInvoice(invNo) {
+        if (!confirm("⚠️ 危險操作！\n\n這將會「永久移除」這張發票紀錄，並將訂單內的數量「回補」為未開立狀態。\n\n確定刪除嗎？")) return;
+        const idx = db.invoices.findIndex(i => i.invNo === invNo);
+        if (idx === -1) return alert("找不到發票");
+        const inv = db.invoices[idx];
+        if (inv.items) {
+            inv.items.forEach(item => {
+                let o = db.orders.find(x => String(x.id) === String(item.oid));
+                if (!o) o = db.manualOrders.find(x => String(x.id) === String(item.oid));
+                if (o) {
+                    const i = o.items.find(x => String(x.uid) === String(item.uid));
+                    if (i) {
+                        i.invoicedQty = Math.max(0, (i.invoicedQty || 0) - item.qty);
+                    }
+                }
+            });
+        }
+        db.invoices.splice(idx, 1);
+        pushToCloud('save_invoice');
+        refreshViews(); 
+        alert("發票已刪除，數量已回補至原訂單。");
+    }
+
+    function initSettingsSafe() {
+        if (!db.settings) {
+            db.settings = { cloudPrefix: 'XC', cloudNext: 0, manualPrefix: 'MM', manualNext: 0 };
+        }
+    }
+
+    window.openInvSettings = function() {
+        initSettingsSafe(); 
+        const modal = document.getElementById('invSettingsModal');
+        if (!modal) return alert("錯誤：找不到設定視窗");
+
+        document.getElementById('setCloudPrefix').value = db.settings.cloudPrefix || '';
+        document.getElementById('setCloudNext').value = db.settings.cloudNext || '';
+        document.getElementById('setManualPrefix').value = db.settings.manualPrefix || '';
+        document.getElementById('setManualNext').value = db.settings.manualNext || '';
+        modal.style.display = 'flex';
+    };
+
+    window.saveInvSettings = function() {
+        const cPre = document.getElementById('setCloudPrefix').value.trim().toUpperCase();
+        const cNext = parseInt(document.getElementById('setCloudNext').value);
+        const mPre = document.getElementById('setManualPrefix').value.trim().toUpperCase();
+        const mNext = parseInt(document.getElementById('setManualNext').value);
+
+        if (!cPre || isNaN(cNext) || !mPre || isNaN(mNext)) {
+            alert("⚠️ 格式錯誤：字軌必須為文字，號碼必須為數字");
+            return;
+        }
+
+        initSettingsSafe();
+        db.settings.cloudPrefix = cPre;
+        db.settings.cloudNext = cNext;
+        db.settings.manualPrefix = mPre;
+        db.settings.manualNext = mNext;
+
+        saveData(); 
+        if(typeof pushToCloud === 'function') pushToCloud('save_settings'); 
+        alert("✅ 設定已更新！");
+        document.getElementById('invSettingsModal').style.display = 'none';
+        
+        if(document.getElementById('invModal').style.display !== 'none') {
+            updateModalInvNo();
+        }
+    };
+function openInvoiceModal() { 
+        if(selectedItems.length === 0) return alert("請先勾選項目"); 
+        
+        // 取得選取的客戶
+        const custs = [...new Set(selectedItems.map(i => i.cust))]; 
+        if(custs.length > 1 && !confirm("跨客戶合併開立？")) return; 
+        
+        const targetCust = custs[0];
+        document.getElementById('modalCust').value = targetCust; 
+
+        // --- 自動帶入統編邏輯 Start ---
+        let autoTaxId = '';
+        try {
+            // 1. 嘗試從來源訂單抓取統編 (由第一筆選取項目的 oid 反查)
+            const firstItem = selectedItems[0];
+            if (firstItem && firstItem.oid) {
+                let srcOrder = db.orders.find(x => String(x.id) === String(firstItem.oid));
+                if (!srcOrder) srcOrder = db.manualOrders.find(x => String(x.id) === String(firstItem.oid));
+                
+                // 如果訂單物件中有 taxId 屬性，就使用它
+                if (srcOrder && srcOrder.taxId) {
+                    autoTaxId = srcOrder.taxId;
+                }
+            }
+            
+            // 2. 如果訂單沒統編，嘗試從歷史發票紀錄找 (備用方案)
+            if (!autoTaxId && db.invoices) {
+                const history = db.invoices.find(inv => inv.cust === targetCust && inv.taxId && inv.taxId.length >= 8);
+                if(history) autoTaxId = history.taxId;
+            }
+        } catch(e) { console.error(e); }
+
+        document.getElementById('modalTaxId').value = autoTaxId;
+        // --- 自動帶入統編邏輯 End ---
+
+        document.getElementById('modalDate').value = new Date().toISOString().split('T')[0]; 
+        updateModalInvNo(); 
+        
+        const tbody = document.getElementById('modalItems'); 
+        tbody.innerHTML = ''; 
+        
+        selectedItems.forEach(item => { 
+            const tr = document.createElement('tr'); 
+            tr.innerHTML = `
+                <td><input class="inv-table-input" value="${item.name}" list="productList"></td>
+                <td><input class="inv-table-input" type="number" value="${item.avail}" oninput="recalcModal()"></td>
+                <td><input class="inv-table-input" type="number" value="${item.price}" oninput="recalcModal()"></td>
+                <td class="row-total" style="text-align:right; padding-right:5px;">0</td>
+                <td>
+                    <input type="hidden" class="row-oid" value="${item.oid}">
+                    <input type="hidden" class="row-uid" value="${item.uid}">
+                </td>
+            `;
+            tbody.appendChild(tr); 
+        }); 
+        
+        const totalContainer = document.getElementById('modalTotal');
+        totalContainer.innerHTML = ''; 
+        
+        recalcModal(); 
+        document.getElementById('invModal').style.display = 'flex'; 
+    }
+// --- 補上缺失的訂單預覽函式 ---
+    function previewOrder(id) {
+        // 1. 搜尋訂單 (包含正式訂單與臨時單)
+        let o = db.orders.find(x => String(x.id) === String(id));
+        if(!o) o = db.manualOrders.find(x => String(x.id) === String(id));
+        
+        if(!o) return alert("找不到訂單資料 (ID: " + id + ")");
+
+        // 2. 產生內容 HTML
+        const itemsHtml = (o.items || []).map((item, idx) => {
+            const total = item.total ? parseFloat(item.total) : (parseFloat(item.price) * parseFloat(item.qty));
+            return `
+            <tr>
+                <td style="padding:8px; border-bottom:1px solid #eee;">${idx + 1}</td>
+                <td style="padding:8px; border-bottom:1px solid #eee;">${item.name}</td>
+                <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;">${item.qty}</td>
+                <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">$${parseFloat(item.price).toLocaleString()}</td>
+                <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">$${total.toLocaleString()}</td>
+            </tr>`;
+        }).join('');
+
+        const orderTotal = o.price ? parseInt(o.price) : (o.items||[]).reduce((s,i)=>s+((parseInt(i.price)||0)*(parseInt(i.qty)||0)),0);
+
+        // 3. 顯示統編欄位 (關鍵檢查點)
+        const taxIdDisplay = o.taxId ? `<span style="color:#d97706; font-weight:bold;">${o.taxId}</span>` : '<span style="color:#999;">(未指定)</span>';
+
+        const html = `
+            <div style="font-family:'Microsoft JhengHei'; padding:10px;">
+                <h2 style="text-align:center; color:#1e40af; border-bottom:2px solid #1e40af; padding-bottom:10px;">📦 訂單詳情</h2>
+                <div style="display:flex; justify-content:space-between; margin:15px 0; background:#f8fafc; padding:15px; border-radius:6px; border:1px solid #e2e8f0;">
+                    <div style="line-height:1.8;">
+                        <div><strong>單號：</strong> ${o.id}</div>
+                        <div><strong>日期：</strong> ${o.date}</div>
+                        <div><strong>狀態：</strong> ${o.inStaging ? '✅ 已轉待處理' : '🆕 新訂單'}</div>
+                    </div>
+                    <div style="text-align:right; line-height:1.8;">
+                        <div><strong>客戶：</strong> ${o.cust}</div>
+                        <div><strong>統編：</strong> ${taxIdDisplay}</div>
+                    </div>
+                </div>
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead style="background:#f1f5f9;">
+                        <tr>
+                            <th style="text-align:left; padding:8px;">#</th>
+                            <th style="text-align:left; padding:8px;">品項</th>
+                            <th style="text-align:center; padding:8px;">數量</th>
+                            <th style="text-align:right; padding:8px;">單價</th>
+                            <th style="text-align:right; padding:8px;">小計</th>
+                        </tr>
+                    </thead>
+                    <tbody>${itemsHtml}</tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4" style="text-align:right; padding:15px 10px; font-weight:bold;">總金額：</td>
+                            <td style="text-align:right; padding:15px 10px; font-weight:bold; color:#d97706; font-size:1.2em;">$${orderTotal.toLocaleString()}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        `;
+        
+        document.getElementById('previewArea').innerHTML = html;
+        document.getElementById('previewModal').style.display = 'flex';
+    }
+</script>
+</body>
+</html>
